@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Public posts</title>
+	<style>
+		* {box-sizing:border-box}
+		html,body {margin:0;height:100%}
+		#Navigation {
+			top:0;
+			left:0;
+			bottom:0;
+			width:300px;
+			padding:20px;
+			position:fixed;
+			background-color:darkgray;
+		}
+		#Navigation ul {list-style:none}
+		#Page {
+			top:0;
+			left:300px;
+			right:0;
+			bottom:0;
+			padding:20px;
+			position:fixed;
+			background-color:#FFF;
+		}
+		#Header {
+			color:#01579b;
+			font-size:3rem;
+			text-align:center;
+			margin-bottom:30px;
+		}
+		#Content {
+			font-size:1rem;
+		}
+	</style>
+</head>
+
+<body>
+	<aside id="Navigation">
+		<ul></ul>
+	</aside>
+
+	<main id="Page">
+		<header id="Header"></header>
+		<section id="Content"></section>
+	</main>
+
+
+	<script src="CONFIG.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/5.9.0/firebase-app.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/5.9.0/firebase-firestore.js"></script>
+	<script>
+		window.onload = () => app.init();
+
+		const app = {
+
+			store: null,
+
+			init() {
+				this.store = firebase.initializeApp(CONFIG).firestore();
+
+				// Get all posts and make links
+				this.store.collection("news")
+					.get()
+					.then(res => res.docs.map( post => { return { id: post.id, label: post.data().label } } ) )
+					.then(links => this.makeLinks(links) )
+					.catch( err => err.code === 'permission-denied' && console.log('Moras biti logovan') );
+			},
+
+			makeLinks(links) {
+				let ul = document.querySelector('#Navigation ul');
+				ul.innerHTML = '';
+				links.forEach(link => ul.innerHTML += '<li><a onclick="app.openPost(\''+link.id+'\')">'+link.label+'</a></li>')
+			},
+
+			openPost(id) {
+				this.store.collection("news")
+					.doc(id)
+					.get()
+					.then(post => this.showPost(post.data()) )
+					.catch( err => err.code === 'permission-denied' && console.log('Moras biti logovan') );
+			},
+
+			showPost(post) {
+				let header = document.querySelector('#Header'),
+					content = document.querySelector('#Content');
+
+				header.innerText = post.title;
+				content.innerHTML = post.content;
+			}
+		};
+	</script>
+</body>
+</html>

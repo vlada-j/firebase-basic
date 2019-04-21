@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset=utf-8 />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Logged Posts</title>
+	<style>
+		* {box-sizing:border-box}
+		html,body {margin:0;height:100%}
+		#Header {
+			top:0;
+			left:0;
+			right:0;
+			height:100px;
+			padding:20px;
+			position:fixed;
+			background-color:lightblue;
+		}
+		#Navigation {
+			top:100px;
+			left:0;
+			bottom:0;
+			width:300px;
+			padding:20px;
+			position:fixed;
+			background-color:darkgray;
+		}
+		#Navigation ul {list-style:none}
+		#Navigation li {clear:both;margin-bottom:5px}
+		#Navigation li button {float:right}
+		#Page {
+			top:100px;
+			left:300px;
+			right:0;
+			bottom:0;
+			padding:20px;
+			position:fixed;
+			background-color:#FFF;
+		}
+		#Page label {
+			display:block;
+			margin-bottom:15px;
+		}
+		#Page label input,
+		#Page label textarea { width:100% }
+	</style>
+</head>
+
+<body>
+<header id="Header">
+	<div id="LoginForm">
+		<input type="text" id="LoginEmail" value="test@test.com" placeholder="Email"/><br>
+		<input type="password" id="LoginPassword" value="admin123" placeholder="Password"/><br>
+		<button onclick="app.login()">Login</button>
+	</div>
+	<div id="UserInfo" hidden>
+		<label></label><br>
+		<button onclick="app.logout()">Logout</button>
+	</div>
+</header>
+
+<aside id="Navigation">
+	<ul></ul>
+	<hr>
+	<button onclick="app.createPost()">+ Create New Post</button>
+</aside>
+
+<main id="Page">
+	<section>
+		<label>Label:<input type="text" id="PostLabel"></label>
+		<label>Title:<input type="text" id="PostTitle"></label>
+		<label>Content:<textarea id="PostContent"></textarea></label>
+		<hr>
+		<button onclick="app.save()">Save</button>
+	</section>
+</main>
+
+
+<script src="CONFIG.js"></script>
+<script src="https://www.gstatic.com/firebasejs/5.9.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/5.9.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/5.9.0/firebase-firestore.js"></script>
+<script>
+	window.onload = () => app.init();
+
+	const app = {
+
+		fbApp: null,
+		auth: null,
+		collection: null,
+		selectedID: false,
+
+		init() {
+			this.fbApp = firebase.initializeApp(CONFIG);
+			this.collection = this.fbApp.firestore().collection('news');
+			this.auth = this.fbApp.auth();
+
+			this.auth.onAuthStateChanged(user => {
+				document.querySelector('#LoginForm').hidden = user;
+				document.querySelector('#UserInfo').hidden = !user;
+				if (user) {
+					document.querySelector('#UserInfo label').innerText = user.displayName + '\n' + user.uid;
+					this.refreshPosts();
+				}
+			});
+		},
+
+		refreshPosts() {
+			if (!this.collection) return;
+
+			let ul = document.querySelector('#Navigation ul');
+			ul.innerHTML = '';
+
+			this.collection
+				.get()
+				.then(res => { ul.innerHTML = ''; return res; })
+				.then(res => res.docs.forEach( post => addLink(post.id, post.data().label) ) )
+				.catch( err => err.code === 'permission-denied' && console.log('Moras biti logovan') );
+
+			function addLink(id, label) {
+				ul.innerHTML += '<li><a onclick="app.selectPost(\''+id+'\')">'+label+'</a> <button onclick="app.deletePost(\''+id+'\')">×</button></li>';
+			}
+		},
+
+		login() {
+			let email = document.querySelector('#LoginEmail').value,
+				pass = document.querySelector('#LoginPassword').value;
+
+			this.auth
+				.signInWithEmailAndPassword(email, pass)
+				.then(res => this.refreshPosts())
+				.catch(err => console.log(err.code, err.message) );
+		},
+
+		logout() {
+			this.auth.signOut();
+			document.querySelector('#LoginForm').hidden = false;
+			document.querySelector('#UserInfo').hidden = true;
+		},
+
+		fillForm(post) {
+			post = post || {};
+			document.querySelector('#PostLabel').value = post.label || '';
+			document.querySelector('#PostTitle').value = post.title || '';
+			document.querySelector('#PostContent').value = post.content || '';
+		},
+
+		selectPost(id) {
+			this.selectedID = id;
+			this.collection
+				.doc(id)
+				.get()
+				.then(post => this.fillForm(post.data()) )
+		},
+
+		createPost() {
+			this.selectedID = false;
+			this.fillForm();
+		},
+		
+		save() {
+			let id = this.selectedID,
+				label = document.querySelector('#PostLabel').value || '',
+				title = document.querySelector('#PostTitle').value || '',
+				content = document.querySelector('#PostContent').value || '',
+				col = this.collection;
+
+			if (!label && !title && !content) return;
+
+			if (!id) {
+				col.add({ label, title, content })
+					.then(docRef => {
+						this.createPost();
+						this.refreshPosts();
+						console.log("Document written with ID: ", docRef.id);
+					})
+					.catch(error => {
+						console.error("Error adding document: ", error);
+					});
+			} else {
+				col.doc(id).set({ label, title, content })
+					.then(() => {
+						this.createPost();
+						this.refreshPosts();
+						console.log("Document successfully written!");
+					})
+					.catch(error => {
+						console.error("Error writing document: ", error);
+					});
+			}
+		},
+
+		deletePost(id) {
+			this.collection
+				.doc(id)
+				.delete()
+				.then(() => {
+					this.refreshPosts();
+					console.log("Document successfully deleted!");
+				})
+				.catch(error => console.error("Error removing document: ", error ) );
+		}
+	};
+</script>
+</body>
+</html>
